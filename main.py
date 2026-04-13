@@ -15,7 +15,8 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import bcrypt as _bcrypt
+from passlib.context import CryptContext
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 from pydantic import BaseModel, EmailStr
 
 # ---------------------------------------------------------------------------
@@ -27,10 +28,10 @@ TOKEN_EXPIRE_HOURS = 24
 DB_PATH = os.getenv("DB_PATH", "messaging.db")
 
 def _hash_pw(password: str) -> str:
-    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+    return _pwd_context.hash(password)
 
 def _verify_pw(password: str, hashed: str) -> bool:
-    return _bcrypt.checkpw(password.encode(), hashed.encode())
+    return _pwd_context.verify(password, hashed)
 
 security = HTTPBearer()
 
