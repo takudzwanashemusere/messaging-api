@@ -5,3 +5,4 @@ passlib[bcrypt]==1.7.4
 PyJWT==2.8.0
 pydantic[email]==2.7.0
 python-dotenv==1.0.1
+gunicorn==21.2.0
