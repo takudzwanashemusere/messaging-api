@@ -15,7 +15,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 from pydantic import BaseModel, EmailStr
 
 # ---------------------------------------------------------------------------
@@ -26,7 +26,12 @@ ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24
 DB_PATH = os.getenv("DB_PATH", "messaging.db")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def _hash_pw(password: str) -> str:
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
+def _verify_pw(password: str, hashed: str) -> bool:
+    return _bcrypt.checkpw(password.encode(), hashed.encode())
+
 security = HTTPBearer()
 
 # ---------------------------------------------------------------------------
@@ -195,8 +200,8 @@ app = FastAPI(title="ReelScholar Messaging API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # tighten in production
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -222,7 +227,7 @@ def register(req: RegisterRequest):
         conn.close()
         raise HTTPException(400, "Email or username already taken")
 
-    hashed = pwd_context.hash(req.password)
+    hashed = _hash_pw(req.password)
     cur = conn.execute(
         "INSERT INTO users (email, username, name, password_hash) VALUES (?, ?, ?, ?)",
         (req.email, req.username, req.name, hashed),
@@ -248,7 +253,7 @@ def login(req: LoginRequest):
     ).fetchone()
     conn.close()
 
-    if not row or not pwd_context.verify(req.password, row["password_hash"]):
+    if not row or not _verify_pw(req.password, row["password_hash"]):
         raise HTTPException(400, "Invalid email or password")
 
     return AuthResponse(
@@ -285,10 +290,10 @@ def search_users(q: str, user_id: int = Depends(get_current_user_id)):
         SELECT id, username, name, is_online
         FROM users
         WHERE id != ?
-          AND (username LIKE ? OR name LIKE ?)
+          AND (username LIKE ? OR name LIKE ? OR email LIKE ?)
         LIMIT 20
         """,
-        (user_id, f"%{q}%", f"%{q}%"),
+        (user_id, f"%{q}%", f"%{q}%", f"%{q}%"),
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
